@@ -2,7 +2,7 @@
 import asyncio
 import torch.multiprocessing as mp
 from pathlib import Path
-from typing import List, Dict, Tuple, Coroutine
+from typing import List, Dict, Coroutine
 from datetime import datetime, timezone, timedelta
 from utils.logging_setup import setup_loggers
 from ml.data import get_cifar10_loaders
@@ -83,11 +83,8 @@ async def main():
         sim_logger, perf_logger = setup_loggers()
 
         sim_logger.info("Loading CIFAR10 dataset...")
-        client_loaders, val_loader, test_loader = get_cifar10_loaders(    num_clients=NUM_CLIENTS,
-                                                                        dirichlet_alpha=DIRICHLET_ALPHA,
-                                                                        batch_size=BATCH_SIZE,
-                                                                        num_workers=NUM_WORKERS
-                                                                    )
+        client_loaders, val_loader, test_loader = get_cifar10_loaders(num_clients=NUM_CLIENTS, dirichlet_alpha=DIRICHLET_ALPHA,
+                                                                      batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
         sim_logger.info("Dataset loaded.")
 
         eval_infra = {
@@ -114,7 +111,7 @@ async def main():
         # satellites 리스트 출력
         print("Loaded Satellites:")
         for _, sat in satellites.items():
-            print(f"  - SAT TYPE: {type(sat)}")
+            print(f"  - SAT ID: {sat.sat_id}, Position: {sat.position}, State: {sat.state}")
 
         sim_logger.info("환경 구성 완료.")
 

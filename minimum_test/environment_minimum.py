@@ -1,11 +1,10 @@
 # minimum_test/environment_minimum.py
 import asyncio
 import torch
-import torch.multiprocessing as mp
 from datetime import datetime
 from skyfield.api import Topos
-from typing import List, Dict, Tuple
-from ml.model import PyTorchModel, create_mobilenet
+from typing import Dict
+from ml.model import PyTorchModel
 from ml.training import evaluate_model, fed_avg
 from minimum_test.satellite_minimum import Satellite
 from utils.logging_setup import KST

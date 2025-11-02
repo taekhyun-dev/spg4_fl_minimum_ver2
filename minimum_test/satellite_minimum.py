@@ -3,11 +3,10 @@ import asyncio
 
 import torch
 import torch.nn as nn
-import torch.multiprocessing as mp
 import torch.optim.lr_scheduler as lr_scheduler
 
 from datetime import datetime
-from typing import List, Tuple, Dict
+from typing import Tuple, Dict
 from ml.model import PyTorchModel, create_mobilenet
 from ml.training import evaluate_model
 from utils.skyfield_utils import EarthSatellite
@@ -32,7 +31,7 @@ class Satellite:
         self.global_model = initial_model
         self.model_ready_to_upload = False
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.logger.info(f"SAT {self.sat_id} 생성. 초기 모델 버전: {self.local_model.version}")
+        self.logger.info(f"SAT {self.sat_id} 생성")
 
     def _train_and_eval(self) -> Tuple[Dict, float, float]:
         """
@@ -68,7 +67,6 @@ class Satellite:
                 optimizer.step()
             scheduler.step()
             
-        print(f"    - SAT {self.sat_id}: Training complete.")
         new_state_dict = temp_model.cpu().state_dict()
         self.logger.info(f"  🧠 SAT {self.sat_id}: 로컬 학습 완료 ({LOCAL_EPOCHS} 에포크). 검증 시작...")
             
