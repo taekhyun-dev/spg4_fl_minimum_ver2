@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import pandas as pd
 from torchvision import transforms
 from torch.utils.data import DataLoader, Subset, random_split
 from torchvision.datasets import CIFAR10
@@ -71,10 +72,28 @@ def get_cifar10_loaders(num_clients, dirichlet_alpha, batch_size=128, data_root=
 
     # --- 5. 클라이언트별 DataLoader 생성 ---
     client_loaders = []
-    for indices in client_data_indices:
+    client_stats_list = []
+    for client_id, indices in enumerate(client_data_indices):
         client_subset = Subset(train_dataset, indices)
         loader = DataLoader(client_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
         client_loaders.append(loader)
+
+        # 통계 계산
+        if len(indices) == 0:
+            client_labels = []
+            class_counts = np.zeros(num_classes, dtype=int)
+        else:
+            # labels (45000개) 배열에서 이 클라이언트에게 할당된 인덱스(indices)를 사용
+            client_labels = labels[indices]
+            class_counts = np.bincount(client_labels, minlength=num_classes)
+            
+        stats = {'total_samples': len(indices)}
+        for c in range(num_classes):
+            # CIFAR10 클래스 이름에 맞게 매핑 (선택 사항)
+            # class_name = full_train_dataset.classes[c]
+            # stats[class_name] = class_counts[c]
+            stats[f'class_{c}'] = class_counts[c]
+        client_stats_list.append(stats)
 
     # --- 6. 중앙 평가용 DataLoader 생성 ---
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
@@ -82,6 +101,17 @@ def get_cifar10_loaders(num_clients, dirichlet_alpha, batch_size=128, data_root=
     
     print(f"Created {num_clients} Non-IID clients with alpha={dirichlet_alpha}.")
     print(f"Total train samples: {train_size}, Validation samples: {val_size}")
+
+    client_stats_df = pd.DataFrame(client_stats_list)
+    client_stats_df.index.name = 'Client_ID'
+
+    # --- 1. 표(Table)로 분포 확인 ---
+    print("\n--- [Client Data Distribution (Table)] ---")
+    print(client_stats_df)
+
+    # --- 2. 시각화(Stacked Bar Chart)로 분포 확인 ---
+    # print("\n--- [Client Data Distribution (Chart)] ---")
+    # print("데이터 분포 시각화 차트를 생성합니다...")
 
     return client_loaders, val_loader, test_loader
 
