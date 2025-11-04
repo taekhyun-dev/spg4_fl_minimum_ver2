@@ -11,7 +11,7 @@ from ml.model import PyTorchModel, create_mobilenet
 from ml.training import evaluate_model
 from utils.skyfield_utils import EarthSatellite
 from utils.logging_setup import KST
-from config import LOCAL_EPOCHS
+from config import LOCAL_EPOCHS, FEDPROX_MU
 from simulation.clock import SimulationClock
 
 # ----- CLASS DEFINITION ----- #
@@ -52,6 +52,15 @@ class Satellite:
         temp_model.load_state_dict(self.local_model.model_state_dict)
         temp_model.to(self.device)
         temp_model.train()
+
+        # --- FedProx 추가 부분 ---
+        #    global_model_ref (w^t): Proximal term 계산을 위한 '고정된' 기준 모델
+        #    마찬가지로 'self.global_model' (w^t)의 가중치를 가지며, 학습되지 않도록 .eval()
+        global_model_ref = create_mobilenet()
+        global_model_ref.load_state_dict(self.global_model.model_state_dict)
+        global_model_ref.to(self.device)
+        global_model_ref.eval() # 중요: gradient가 흐르지 않도록 설정
+
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(temp_model.parameters(), lr=3e-4, weight_decay=1e-4)
         scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
@@ -61,9 +70,25 @@ class Satellite:
             for images, labels in self.train_loader:
                 images, labels = images.to(self.device), labels.to(self.device)
                 optimizer.zero_grad()
+
                 outputs = temp_model(images)
                 loss = criterion(outputs, labels)
-                loss.backward()
+                
+                # --- FedProx 손실 함수 수정 부분 ---
+                #     근접 항(Proximal Term) 계산: ||w - w^t||^2
+                prox_term = 0.0
+
+                # temp_model.parameters() (w)와 global_model_ref.parameters() (w^t) 비교
+                for local_param, global_param in zip(temp_model.parameters(), global_model_ref.parameters()):
+                    # .detach()를 사용하여 w^t의 gradient가 계산되지 않도록 함
+                    prox_term += torch.sum(torch.pow(local_param - global_param.detach(), 2))
+
+                # --- FedProx 손실 함수 최종 계산 부분 ---
+                #     최종 손실 계산: Loss + (mu/2) * prox_term
+                total_loss = loss + (FEDPROX_MU / 2) * prox_term
+
+                # loss.backward()
+                total_loss.backward()
                 optimizer.step()
             scheduler.step()
             
