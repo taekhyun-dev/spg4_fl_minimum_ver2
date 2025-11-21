@@ -2,7 +2,6 @@
 from typing import List, OrderedDict
 import torch
 import torch.nn as nn
-from typing import Dict, Tuple
 from .model import create_mobilenet
 
 def evaluate_model(model_state_dict, data_loader, device):
@@ -31,6 +30,11 @@ def evaluate_model(model_state_dict, data_loader, device):
     avg_loss = total_loss / len(data_loader)
     return accuracy, avg_loss
 
+"""
+Aggregation 함수
+이 부분에서 전체 모델의 성능 차이가 발생함.
+연구의 핵심 부분
+"""
 def fed_avg(models_to_average: List[OrderedDict]) -> OrderedDict:
     """
     Federated Averaging 알고리즘을 수행.

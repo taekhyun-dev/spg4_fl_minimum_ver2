@@ -109,9 +109,5 @@ def get_cifar10_loaders(num_clients, dirichlet_alpha, batch_size=128, data_root=
     print("\n--- [Client Data Distribution (Table)] ---")
     print(client_stats_df)
 
-    # --- 2. 시각화(Stacked Bar Chart)로 분포 확인 ---
-    # print("\n--- [Client Data Distribution (Chart)] ---")
-    # print("데이터 분포 시각화 차트를 생성합니다...")
-
     return client_loaders, val_loader, test_loader
 
