@@ -30,6 +30,7 @@ class Satellite:
         self.val_loader = val_loader
         self.global_model = initial_model
         self.model_ready_to_upload = False
+        self.miou = 0.0
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.logger.info(f"SAT {self.sat_id} 생성")
 
@@ -62,7 +63,7 @@ class Satellite:
         global_model_ref.eval() # 중요: gradient가 흐르지 않도록 설정
 
         criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(temp_model.parameters(), lr=3e-4, weight_decay=1e-4)
+        optimizer = torch.optim.Adam(temp_model.parameters(), lr=0.0003, weight_decay=1e-4)
         scheduler = lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
     
         for epoch in range(LOCAL_EPOCHS):
@@ -110,6 +111,7 @@ class Satellite:
             loop = asyncio.get_running_loop()
             new_state_dict, accuracy, loss, miou = await loop.run_in_executor(None, self._train_and_eval)
             self.local_model.model_state_dict = new_state_dict
+            self.miou = miou
             self.logger.info(f"  📊 [Local Validation] SAT: {self.sat_id}, Version: {self.local_model.version}, Accuracy: {accuracy:.2f}%, Loss: {loss:.4f}, Miou: {miou:.2f}%")
             self.perf_logger.info(f"{datetime.now(KST).isoformat()},LOCAL_VALIDATION,{self.sat_id},{self.local_model.version},N/A,{accuracy:.4f},{loss:.6f},{miou:.4f}")
 

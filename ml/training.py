@@ -59,3 +59,42 @@ def fed_avg(models_to_average: List[OrderedDict]) -> OrderedDict:
         avg_tensor = torch.stack(tensors).mean(dim=0)
         avg_state_dict[key] = avg_tensor
     return avg_state_dict
+
+
+def weighted_update(global_state_dict: OrderedDict, local_state_dict: OrderedDict, alpha: float, device: str = 'cpu') -> OrderedDict:
+    """
+    기존 글로벌 모델과 로컬 모델을 alpha 비율로 섞는 Weighted Update를 수행합니다.
+    
+    수식:
+        w_new = (1 - alpha) * w_global + alpha * w_local
+    
+    Args:
+        global_state_dict: 현재 글로벌 모델의 가중치
+        local_state_dict: 업데이트할 로컬 모델의 가중치
+        alpha: 로컬 모델 반영 비율 (0.0 ~ 1.0). 클수록 로컬 정보를 많이 반영.
+        device: 연산을 수행할 디바이스 (예: 'cuda', 'cpu')
+        
+    Returns:
+        OrderedDict: 업데이트된 새로운 가중치 딕셔너리 (CPU 저장)
+    """
+    updated_state_dict = OrderedDict()
+    
+    for key in global_state_dict.keys():
+        # 연산을 위해 디바이스로 이동 및 float 형변환
+        global_param = global_state_dict[key].to(device).float()
+        
+        # 로컬 모델에 해당 키가 있는지 안전장치 (보통 구조가 같으므로 생략 가능하나 안전을 위해)
+        if key in local_state_dict:
+            local_param = local_state_dict[key].to(device).float()
+            
+            # Weighted Sum 계산
+            # (1 - alpha) * G + alpha * L
+            updated_param = (1.0 - alpha) * global_param + alpha * local_param
+            
+            # 결과는 CPU로 내려서 저장 (메모리 절약)
+            updated_state_dict[key] = updated_param.cpu()
+        else:
+            # 키가 없으면 기존 글로벌 파라미터 유지
+            updated_state_dict[key] = global_state_dict[key].cpu()
+            
+    return updated_state_dict

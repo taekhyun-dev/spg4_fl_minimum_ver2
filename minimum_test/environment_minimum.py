@@ -6,7 +6,7 @@ from datetime import datetime
 from skyfield.api import Topos
 from typing import Dict
 from ml.model import PyTorchModel
-from ml.training import evaluate_model, fed_avg
+from ml.training import evaluate_model, fed_avg, weighted_update
 from minimum_test.satellite_minimum import Satellite
 from utils.logging_setup import KST
 from config import AGGREGATION_STALENESS_THRESHOLD, IOT_FLYOVER_THRESHOLD_DEG
@@ -107,11 +107,61 @@ class GroundStation:
             self.logger.info(f"  📥 {self.name} <- SAT {satellite.sat_id}: 로컬 모델 수신 완료 (버전 {local_model.version}, 학습자: {local_model.trained_by})")
             # Local Model 수신 후 Aggregation 진행 - I/O 작업이므로 코틀린
             await self.try_aggregate_and_update(satellite.sat_id, local_model)
+        else:
+             self.logger.warning(f"⚠️ [Drop] SAT {satellite.sat_id} 모델 폐기 (Too Stale: v{local_model.version} vs v{self.global_model.version})")
+             return
+
+    def calculate_mixing_weight(self, local_version, current_version, local_miou):
+        import numpy as np
+        """
+        Aggregation 가중치(alpha)를 동적으로 계산하는 함수 (연구 차별점)
+        """
+        BASE_ALPHA = 0.1  # 기본 반영 비율 (보수적 접근)
+        global_miou = self.best_miou
+        
+        # 1. Staleness 패널티
+        # 버전 차이가 클수록 반영 비율이 1/2, 1/3... 로 줄어듦
+        staleness = max(0, current_version - local_version)
+        staleness_factor = 1.0 / (1.0 + staleness) 
+        
+        # 2. Performance (성능) 가중치
+        # 로컬 모델이 글로벌 모델보다 성능이 좋으면 더 적극적으로 반영 (최대 2배)
+        # 성능이 나쁘면 반영 비율 감소 (최소 0.5배)
+        if global_miou > 0:
+            perf_ratio = local_miou / global_miou
+            # perf_ratio를 0.5 ~ 2.0 사이로 클리핑하여 안정성 확보
+            performance_factor = np.clip(perf_ratio, 0.5, 2.0)
+        else:
+            performance_factor = 1.0
+
+        # 최종 반영 비율 계산 (보통 0.05 ~ 0.2 사이가 됨)
+        final_alpha = BASE_ALPHA * staleness_factor * performance_factor
+        
+        return final_alpha, staleness_factor, performance_factor
 
     async def try_aggregate_and_update(self, sat_id, local_model: PyTorchModel):
         """Aggregation 수행"""
         self.logger.info(f"✨ [{self.name} Aggregation] 진행 - SAT {sat_id}의 v{local_model.version} 로컬 모델과 기존 글로벌 모델(v{self.global_model.version}) 취합 시작...")
         
+        current_global_miou = self.best_miou
+
+        # --- Dynamic Mixing Weight 계산 ---
+        alpha, s_factor, p_factor = self.calculate_mixing_weight(
+            local_model.version, self.global_model.version, local_model.miou, current_global_miou
+        )
+
+        self.logger.info(f"✨ [{self.name} Aggregation] SAT {sat_id} 반영 시작")
+        self.logger.info(f"   - Staleness: {self.global_model.version - local_model.version} (Factor: {s_factor:.2f})")
+        self.logger.info(f"   - Performance Ratio: {local_model.miou:.2f}/{current_global_miou:.2f} (Factor: {p_factor:.2f})")
+        self.logger.info(f"   👉 최종 반영 비율(Alpha): {alpha:.4f}")
+
+        new_state_dict = weighted_update(
+            global_state_dict=self.global_model.model_state_dict, 
+            local_state_dict=local_model.model_state_dict, 
+            alpha=alpha, 
+            device=self.device
+        )
+
         state_dicts_to_avg = [self.global_model.model_state_dict] + [local_model.model_state_dict]
         new_state_dict = fed_avg(state_dicts_to_avg)
         
