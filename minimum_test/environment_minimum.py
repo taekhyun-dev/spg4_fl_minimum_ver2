@@ -111,10 +111,14 @@ class GroundStation:
              self.logger.warning(f"⚠️ [Drop] SAT {satellite.sat_id} 모델 폐기 (Too Stale: v{local_model.version} vs v{self.global_model.version})")
              return
 
-    def calculate_mixing_weight(self, local_version, current_version, local_miou):
+    def calculate_mixing_weight(self, local_version, current_version, local_miou, local_data_count, avg_data_count=36):
         import numpy as np
         """
         Aggregation 가중치(alpha)를 동적으로 계산하는 함수 (연구 차별점)
+
+        Args:
+        local_data_count: 해당 위성이 학습에 사용한 배치 개수 (예: 212)
+        avg_data_count: 클러스터 내 위성들의 평균 배치 개수 (기준값)
         """
         BASE_ALPHA = 0.1  # 기본 반영 비율 (보수적 접근)
         global_miou = self.best_miou
@@ -134,8 +138,13 @@ class GroundStation:
         else:
             performance_factor = 1.0
 
+        data_ratio = local_data_count / avg_data_count
+        data_factor = np.clip(data_ratio, 0.5, 2.0)
         # 최종 반영 비율 계산 (보통 0.05 ~ 0.2 사이가 됨)
-        final_alpha = BASE_ALPHA * staleness_factor * performance_factor
+        # final_alpha = BASE_ALPHA * staleness_factor * performance_factor
+        final_alpha = BASE_ALPHA * staleness_factor * performance_factor * data_factor
+
+        final_alpha = min(final_alpha, 1.0)
         
         return final_alpha, staleness_factor, performance_factor
 
