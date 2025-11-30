@@ -6,7 +6,7 @@ from datetime import datetime
 from skyfield.api import Topos
 from typing import Dict
 from ml.model import PyTorchModel
-from ml.training import evaluate_model, fed_avg, weighted_update
+from ml.training import evaluate_model, weighted_update
 from minimum_test.satellite_minimum import Satellite
 from utils.logging_setup import KST
 from config import AGGREGATION_STALENESS_THRESHOLD, IOT_FLYOVER_THRESHOLD_DEG
@@ -174,8 +174,8 @@ class GroundStation:
             device=self.device
         )
 
-        state_dicts_to_avg = [self.global_model.model_state_dict] + [local_model.model_state_dict]
-        new_state_dict = fed_avg(state_dicts_to_avg)
+        # state_dicts_to_avg = [self.global_model.model_state_dict] + [local_model.model_state_dict]
+        # new_state_dict = fed_avg(state_dicts_to_avg)
         
         new_version = self.global_model.version + 1 # 버전업
         all_contributors = list(set(self.global_model.trained_by + [p for p in local_model.trained_by]))
