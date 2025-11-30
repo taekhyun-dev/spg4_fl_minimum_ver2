@@ -37,6 +37,7 @@ def create_simulation_environment(
     sim_logger = eval_infra['sim_logger']
     perf_logger = eval_infra['perf_logger']
     client_loaders = eval_infra['client_loaders']
+    avg_data_count = eval_infra['avg_data_count']
     val_loader = eval_infra['val_loader']
     test_loader = eval_infra['test_loader']
 
@@ -50,7 +51,7 @@ def create_simulation_environment(
     # 지상국 및 IoT 클러스터 생성
     ground_stations = [
         GroundStation("Seoul-GS", 37.5665, 126.9780, 34, sim_logger, initial_model=initial_global_model, test_loader=test_loader,
-                      perf_logger=perf_logger),
+                      perf_logger=perf_logger, avg_data_count=avg_data_count),
         # GroundStation("Houston-GS", 29.7604, -95.3698, 12, initial_model=initial_global_model, eval_infra=eval_infra)
     ]
     
@@ -83,13 +84,14 @@ async def main():
         sim_logger, perf_logger = setup_loggers()
 
         sim_logger.info("Loading CIFAR10 dataset...")
-        client_loaders, val_loader, test_loader = get_cifar10_loaders(num_clients=NUM_CLIENTS, dirichlet_alpha=DIRICHLET_ALPHA,
+        avg_data_count, client_loaders, val_loader, test_loader = get_cifar10_loaders(num_clients=NUM_CLIENTS, dirichlet_alpha=DIRICHLET_ALPHA,
                                                                       batch_size=BATCH_SIZE, num_workers=NUM_WORKERS)
         sim_logger.info("Dataset loaded.")
 
         eval_infra = {
             "sim_logger": sim_logger,
             "perf_logger": perf_logger,
+            "avg_data_count": avg_data_count,
             "client_loaders": client_loaders,
             "val_loader": val_loader,
             "test_loader": test_loader,

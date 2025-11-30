@@ -95,6 +95,12 @@ def get_cifar10_loaders(num_clients, dirichlet_alpha, batch_size=128, data_root=
             stats[f'class_{c}'] = class_counts[c]
         client_stats_list.append(stats)
 
+    if len(client_loaders) > 0:
+        # 각 로더의 길이(배치 수)를 모두 더한 뒤 클라이언트 수로 나눔
+        avg_data_count = sum(len(loader) for loader in client_loaders) / len(client_loaders)
+    else:
+        avg_data_count = 0
+
     # --- 6. 중앙 평가용 DataLoader 생성 ---
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
@@ -109,5 +115,5 @@ def get_cifar10_loaders(num_clients, dirichlet_alpha, batch_size=128, data_root=
     print("\n--- [Client Data Distribution (Table)] ---")
     print(client_stats_df)
 
-    return client_loaders, val_loader, test_loader
+    return avg_data_count, client_loaders, val_loader, test_loader
 

@@ -49,7 +49,7 @@ class IoT:
             self.global_model = model
 
 class GroundStation:
-    def __init__ (self, name, latitude, longitude, elevation, sim_logger, initial_model: PyTorchModel, test_loader, perf_logger,
+    def __init__ (self, name, latitude, longitude, elevation, sim_logger, initial_model: PyTorchModel, test_loader, perf_logger, avg_data_count,
                    threshold_deg: float = 10.0, staleness_threshold: int = AGGREGATION_STALENESS_THRESHOLD):
         self.name = name
         self.logger = sim_logger
@@ -61,6 +61,7 @@ class GroundStation:
         self.test_loader = test_loader
         self.perf_logger = perf_logger
         self.best_miou = 0.0
+        self.avg_data_count = avg_data_count
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.logger.info(f"지상국 '{self.name}' 생성 완료. 글로벌 모델 버전: {self.global_model.version}")
         self.logger.info(f"  - Aggregation 정책: 버전 허용치 {self.staleness_threshold}")
@@ -148,20 +149,22 @@ class GroundStation:
         
         return final_alpha, staleness_factor, performance_factor
 
-    async def try_aggregate_and_update(self, sat_id, local_model: PyTorchModel):
+    async def try_aggregate_and_update(self, sat: Satellite, local_model: PyTorchModel):
         """Aggregation 수행"""
+        sat_id = sat.sat_id
+
         self.logger.info(f"✨ [{self.name} Aggregation] 진행 - SAT {sat_id}의 v{local_model.version} 로컬 모델과 기존 글로벌 모델(v{self.global_model.version}) 취합 시작...")
         
         current_global_miou = self.best_miou
 
         # --- Dynamic Mixing Weight 계산 ---
         alpha, s_factor, p_factor = self.calculate_mixing_weight(
-            local_model.version, self.global_model.version, local_model.miou, current_global_miou
+            local_model.version, self.global_model.version, sat.miou, len(sat.train_loader), self.avg_data_count
         )
 
         self.logger.info(f"✨ [{self.name} Aggregation] SAT {sat_id} 반영 시작")
         self.logger.info(f"   - Staleness: {self.global_model.version - local_model.version} (Factor: {s_factor:.2f})")
-        self.logger.info(f"   - Performance Ratio: {local_model.miou:.2f}/{current_global_miou:.2f} (Factor: {p_factor:.2f})")
+        self.logger.info(f"   - Performance Ratio: {sat.miou:.2f}/{current_global_miou:.2f} (Factor: {p_factor:.2f})")
         self.logger.info(f"   👉 최종 반영 비율(Alpha): {alpha:.4f}")
 
         new_state_dict = weighted_update(
