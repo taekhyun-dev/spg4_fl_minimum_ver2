@@ -140,14 +140,14 @@ class GroundStation:
             performance_factor = 1.0
 
         data_ratio = local_data_count / avg_data_count
-        data_factor = np.clip(data_ratio, 0.5, 2.0)
+        data_factor = np.clip(data_ratio, 0.1, 5.0)
         # 최종 반영 비율 계산 (보통 0.05 ~ 0.2 사이가 됨)
         # final_alpha = BASE_ALPHA * staleness_factor * performance_factor
         final_alpha = BASE_ALPHA * staleness_factor * performance_factor * data_factor
 
         final_alpha = min(final_alpha, 1.0)
         
-        return final_alpha, staleness_factor, performance_factor
+        return final_alpha, staleness_factor, performance_factor, data_factor
 
     async def try_aggregate_and_update(self, sat: Satellite, local_model: PyTorchModel):
         """Aggregation 수행"""
@@ -156,15 +156,17 @@ class GroundStation:
         self.logger.info(f"✨ [{self.name} Aggregation] 진행 - SAT {sat_id}의 v{local_model.version} 로컬 모델과 기존 글로벌 모델(v{self.global_model.version}) 취합 시작...")
         
         current_global_miou = self.best_miou
+        local_batch_count = len(sat.train_loader)
 
         # --- Dynamic Mixing Weight 계산 ---
-        alpha, s_factor, p_factor = self.calculate_mixing_weight(
-            local_model.version, self.global_model.version, sat.miou, len(sat.train_loader), self.avg_data_count
+        alpha, s_factor, p_factor, d_factor = self.calculate_mixing_weight(
+            local_model.version, self.global_model.version, sat.miou, local_batch_count, self.avg_data_count
         )
 
         self.logger.info(f"✨ [{self.name} Aggregation] SAT {sat_id} 반영 시작")
-        self.logger.info(f"   - Staleness: {self.global_model.version - local_model.version} (Factor: {s_factor:.2f})")
-        self.logger.info(f"   - Performance Ratio: {sat.miou:.2f}/{current_global_miou:.2f} (Factor: {p_factor:.2f})")
+        self.logger.info(f"    - Staleness: {s_factor:.2f} (Ver Diff: {self.global_model.version - local_model.version})")
+        self.logger.info(f"    - Performance: {p_factor:.2f} (Local: {sat.miou:.2f}% / Global: {current_global_miou:.2f}%)")
+        self.logger.info(f"    - Data Volume: {d_factor:.2f} (Local: {local_batch_count} / Avg: 36)")
         self.logger.info(f"   👉 최종 반영 비율(Alpha): {alpha:.4f}")
 
         new_state_dict = weighted_update(
