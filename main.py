@@ -4,10 +4,11 @@ import torch.multiprocessing as mp
 from pathlib import Path
 from typing import List, Dict, Coroutine
 from datetime import datetime, timezone, timedelta
-from utils.logging_setup import setup_loggers
+from utils.logging_setup import KST, setup_loggers
+from utils.monitor import SystemMonitor
+from utils.skyfield_utils import EarthSatellite
 from ml.data import get_cifar10_loaders
 from simulation.clock import SimulationClock
-from utils.skyfield_utils import EarthSatellite
 from minimum_test.satellite_minimum import Satellite, Satellite_Manager
 from ml.model import PyTorchModel, create_mobilenet
 from minimum_test.environment_minimum import IoT, GroundStation
@@ -105,6 +106,14 @@ async def main():
             sim_logger=sim_logger
         )
 
+        current_time = datetime.now(KST).strftime("%Y%m%d_%H%M%S")
+        resource_monitor = SystemMonitor(
+            logger=sim_logger, 
+            interval=1.0, 
+            log_file=f"./logs/resource_{current_time}.csv" # 로그 파일명 지정
+        )
+        monitor_task = asyncio.create_task(resource_monitor.run())
+
         # 로드된 데이터를 전달하여 시뮬레이션 환경 구성
         sim_logger.info("시뮬레이션 환경을 구성 ...")
         sat_manager, satellites, ground_stations, iot_clusters = create_simulation_environment(
@@ -125,8 +134,15 @@ async def main():
             sat_manager.run()
         ]
         sim_logger.info("시뮬레이션을 시작합니다.")
-        await asyncio.gather(*[asyncio.create_task(task) for task in sim_tasks])
-
+        try:
+            await asyncio.gather(*sim_tasks)
+        except KeyboardInterrupt:
+            sim_logger.info("Simulation Interrupted.")
+        finally:
+            # 4. 종료 시 모니터 정리
+            resource_monitor.stop()
+            await monitor_task
+            sim_logger.info("Simulation Finished.")
     except KeyboardInterrupt:
         print("\n시뮬레이션을 종료합니다.")
     except FileNotFoundError as e:

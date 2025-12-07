@@ -131,6 +131,8 @@ class GroundStation:
         # 버전 차이가 클수록 반영 비율이 1/2, 1/3... 로 줄어듦
         staleness = max(0, current_version - local_version)
         staleness_factor = 1.0 / (1.0 + staleness) 
+
+        perf_ratio = 1.0
         
         # 2. Performance (성능) 가중치
         # 로컬 모델이 글로벌 모델보다 성능이 좋으면 더 적극적으로 반영 (최대 2배)
@@ -142,9 +144,17 @@ class GroundStation:
         else:
             performance_factor = 1.0
 
-        data_ratio = local_data_count / avg_data_count
-        # data_factor = np.clip(data_ratio, 0.1, 5.0)
-        data_factor = np.clip(data_ratio, 0.05, 10.0)
+        if avg_data_count > 0:
+            data_ratio = local_data_count / avg_data_count
+            # [전략] 데이터 많은 위성(SAT 4)을 살리기 위해 범위를 0.05 ~ 10.0으로 설정 (아주 좋음)
+            data_factor = np.clip(data_ratio, 0.05, 10.0)
+        else:
+            data_ratio = 1.0
+            data_factor = 1.0
+
+        # data_ratio = local_data_count / avg_data_count
+        # # data_factor = np.clip(data_ratio, 0.1, 5.0)
+        # data_factor = np.clip(data_ratio, 0.05, 10.0)
         # 최종 반영 비율 계산 (보통 0.05 ~ 0.2 사이가 됨)
         # final_alpha = BASE_ALPHA * staleness_factor * performance_factor
 
