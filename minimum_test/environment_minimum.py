@@ -106,13 +106,16 @@ class GroundStation:
         local_model = await satellite.send_local_model()
         if local_model and self.global_model.version - local_model.version <= self.staleness_threshold:
             self.logger.info(f"  📥 {self.name} <- SAT {satellite.sat_id}: 로컬 모델 수신 완료 (버전 {local_model.version}, 학습자: {local_model.trained_by})")
+            if satellite.miou < 50.0:  # 50% 미만은 아예 쳐다보지도 않음
+                self.logger.warning(f"⚠️ Drop model from SAT {satellite.sat_id} (Miou: {satellite.miou:.2f}%)")
+                return
             # Local Model 수신 후 Aggregation 진행 - I/O 작업이므로 코틀린
             await self.try_aggregate_and_update(satellite.sat_id, local_model)
         else:
              self.logger.warning(f"⚠️ [Drop] SAT {satellite.sat_id} 모델 폐기 (Too Stale: v{local_model.version} vs v{self.global_model.version})")
              return
 
-    def calculate_mixing_weight(self, local_version, current_version, local_miou, local_data_count, avg_data_count=36):
+    def calculate_mixing_weight(self, local_version, current_version, local_miou, local_data_count, avg_data_count):
         import numpy as np
         """
         Aggregation 가중치(alpha)를 동적으로 계산하는 함수 (연구 차별점)
@@ -140,9 +143,13 @@ class GroundStation:
             performance_factor = 1.0
 
         data_ratio = local_data_count / avg_data_count
-        data_factor = np.clip(data_ratio, 0.1, 5.0)
+        # data_factor = np.clip(data_ratio, 0.1, 5.0)
+        data_factor = np.clip(data_ratio, 0.05, 10.0)
         # 최종 반영 비율 계산 (보통 0.05 ~ 0.2 사이가 됨)
         # final_alpha = BASE_ALPHA * staleness_factor * performance_factor
+
+        if perf_ratio > 1.0 or data_ratio > 2.0:
+            staleness_factor = 1.0
         final_alpha = BASE_ALPHA * staleness_factor * performance_factor * data_factor
 
         final_alpha = min(final_alpha, 1.0)
