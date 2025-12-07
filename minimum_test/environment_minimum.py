@@ -109,8 +109,17 @@ class GroundStation:
             if satellite.miou < 50.0:  # 50% 미만은 아예 쳐다보지도 않음
                 self.logger.warning(f"⚠️ Drop model from SAT {satellite.sat_id} (Miou: {satellite.miou:.2f}%)")
                 return
+            # 2. [신규/핵심] 상대적 성능 검사 (후반 방어용)
+            # 글로벌 모델이 어느 정도 학습된 상태(예: mIoU 50 이상)라면 더 엄격하게 봄
+            if self.best_miou > 50.0:
+                # 글로벌 최고 기록의 70% 도 안되는 모델은 노이즈로 간주하고 폐기
+                relative_threshold = self.best_miou * 0.7 
+                
+                if local_model.miou < relative_threshold:
+                    self.logger.warning(f"🛡️ [Drop] SAT {satellite.sat_id} 성능 미달 (Local: {satellite.miou:.2f}% < Global Best의 70%: {relative_threshold:.2f}%)")
+                    return
             # Local Model 수신 후 Aggregation 진행 - I/O 작업이므로 코틀린
-            await self.try_aggregate_and_update(satellite.sat_id, local_model)
+            await self.try_aggregate_and_update(satellite, local_model)
         else:
              self.logger.warning(f"⚠️ [Drop] SAT {satellite.sat_id} 모델 폐기 (Too Stale: v{local_model.version} vs v{self.global_model.version})")
              return
@@ -162,7 +171,9 @@ class GroundStation:
             staleness_factor = 1.0
         final_alpha = BASE_ALPHA * staleness_factor * performance_factor * data_factor
 
-        final_alpha = min(final_alpha, 1.0)
+        MAX_ALPHA_LIMIT = 0.5 
+        final_alpha = min(final_alpha, MAX_ALPHA_LIMIT)
+        # final_alpha = min(final_alpha, 1.0)
         
         return final_alpha, staleness_factor, performance_factor, data_factor
 
