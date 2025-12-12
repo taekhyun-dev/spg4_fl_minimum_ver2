@@ -171,7 +171,16 @@ class GroundStation:
             staleness_factor = 1.0
         final_alpha = BASE_ALPHA * staleness_factor * performance_factor * data_factor
 
-        MAX_ALPHA_LIMIT = 0.5 
+        # [수정] 글로벌 모델 성능에 따른 동적 제한
+        if self.best_miou > 80.0:
+            # 이미 80점 넘으면 최대 10%까지만 반영 (조심조심 튜닝)
+            MAX_ALPHA_LIMIT = 0.1 
+        elif self.best_miou > 60.0:
+            MAX_ALPHA_LIMIT = 0.3
+        else:
+            # 초반에는 과감하게 50%까지 허용
+            MAX_ALPHA_LIMIT = 0.5
+            
         final_alpha = min(final_alpha, MAX_ALPHA_LIMIT)
         # final_alpha = min(final_alpha, 1.0)
         
