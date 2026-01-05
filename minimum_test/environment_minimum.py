@@ -36,7 +36,7 @@ class IoT:
                         receive_model_task = asyncio.create_task(sat.send_model_to_iot(self))
                         tasks.append(receive_model_task)
                     # Local Update 진행 - CPU 작업이므로 프로세스 풀로 오프로딩
-                    if sat.state == 'IDLE' and not sat.model_ready_to_upload:
+                    elif sat.state == 'IDLE' and not sat.model_ready_to_upload:
                         local_update_task = asyncio.create_task(sat.train_and_eval())
                         tasks.append(local_update_task)
                     await asyncio.gather(*tasks)

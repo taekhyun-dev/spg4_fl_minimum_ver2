@@ -101,7 +101,7 @@ async def main():
         start_time = datetime.now(timezone.utc)
         simulation_clock = SimulationClock(
             start_dt=start_time, 
-            time_step=timedelta(seconds=1),
+            time_step=timedelta(seconds=10),
             real_interval=1.0,
             sim_logger=sim_logger
         )
